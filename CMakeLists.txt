@@ -19,10 +19,12 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
+set(Qt5_DIR "C:\\Qt\\5.15.2\\msvc2019_64\\lib\\cmake\\Qt5")
+set(lsl_DIR ${CMAKE_CURRENT_LIST_DIR}/build64/liblsl)
+#set(IvyQt_DIR ${CMAKE_CURRENT_LIST_DIR}/build64/IvyQt)
 
-set(lsl_DIR ${CMAKE_CURRENT_LIST_DIR}/LSL/lib/cmake/LSL)
 
-find_package(Qt5 REQUIRED COMPONENTS Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Network Core)
 find_package(Threads REQUIRED)
 find_package(lsl REQUIRED
 	HINTS ${LSL_INSTALL_ROOT}
@@ -31,7 +33,7 @@ find_package(lsl REQUIRED
 	"${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/out/build/x64-Release"
 	"${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/out/install/x64-Release"
 	PATH_SUFFIXES share/LSL)
-
+#find_package(IvyQt REQUIRED)
 set_target_properties(${target} PROPERTIES AUTORCC_OPTIONS "--compress;9")
 
 
@@ -73,13 +75,21 @@ add_executable(${PROJECT_NAME} WIN32
 	mainwindow.ui
 	mainwindow.rc
 	actiCHampLib/Amplifier_LIB.h
+	IvyQt/include/IvyQt/ivyqt.h
+	IvyQt/include/IvyQt/peer.h
+	IvyQt/src/ivyqt.cpp
+	IvyQt/src/peer.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
 	PRIVATE
 	Qt5::Widgets
+	Qt5::Core
+	Qt5::Network
 	Threads::Threads
 	LSL::lsl
+	iphlpapi
+	Ws2_32
 	${actiCHampLib}
 )	
 

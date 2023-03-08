@@ -52,7 +52,7 @@ private:
 
 public:
 
-	LibTalker::LibTalker();
+	LibTalker();
 	~LibTalker();
 	void Error(const std::string& sError, int nErrorNum);
 	void Connect(const std::string& sSerialNumber, bool bUseSim=false);

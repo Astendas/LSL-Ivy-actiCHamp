@@ -50,9 +50,58 @@ MainWindow::MainWindow(QWidget *parent, const char* config_file): QMainWindow(pa
 	QObject::connect(ui->availableDevices, SIGNAL(currentIndexChanged(int)), this, SLOT(ChooseDevice(int)));
 	QObject::connect(ui->rbDefault, SIGNAL(clicked(bool)), this, SLOT(RadioButtonBehavior(bool)));
 	QObject::connect(ui->rbMirror, SIGNAL(clicked(bool)), this, SLOT(RadioButtonBehavior(bool)));
+	QObject::connect(this,SIGNAL(send(QString)),this,SLOT(sendMsg(QString)),Qt::QueuedConnection);
 	SetSamplingRate();
 	QString cfgfilepath = find_config_file(config_file);
+
+	//ivy config
+	ivyqt = new IvyQt("IvyQt_EEG", "IvyQt_EEG Ready\x03", this);
+	DWORD outBufLen = 1 << 19;
+	PIP_ADAPTER_ADDRESSES ifaddrs = (IP_ADAPTER_ADDRESSES *) new char[outBufLen];
+	ULONG RetVal = GetAdaptersAddresses(AF_UNSPEC,
+		GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_DNS_SERVER, NULL, ifaddrs,
+		&outBufLen);
+
+	if (RetVal == NO_ERROR) {
+		for (PIP_ADAPTER_ADDRESSES addr = ifaddrs; addr != 0; addr = addr->Next) {
+			// Interface isn't up or doesn't support multicast? Skip it.
+			if (addr->OperStatus != IfOperStatusUp) continue;
+			if (addr->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+			if (addr->NoMulticast) continue;
+
+			// Find the first IPv4 address
+			if (addr->Ipv4Enabled) {
+				for (IP_ADAPTER_UNICAST_ADDRESS_LH *uaddr = addr->FirstUnicastAddress; uaddr != 0; uaddr = uaddr->Next) {
+					if (uaddr->Address.lpSockaddr->sa_family != AF_INET) continue;
+					DWORD ip, subnet_mask;
+					char str_buffer[INET_ADDRSTRLEN] = {0};
+					SOCKADDR_IN* ipv4 = reinterpret_cast<SOCKADDR_IN*>(uaddr->Address.lpSockaddr);
+
+					inet_ntop(AF_INET, &(ipv4->sin_addr), str_buffer, INET_ADDRSTRLEN);
+					inet_pton(AF_INET, str_buffer, &ip);
+					ConvertLengthToIpv4Mask(uaddr->OnLinkPrefixLength,&subnet_mask);
+
+					DWORD broadcast_ip = (ip | ~subnet_mask);
+					char broadcast_ip_str[16];
+					inet_ntop(AF_INET, &broadcast_ip, broadcast_ip_str, 16);		
+					//starting ivy on LAN
+					setWindowTitle("Launching Ivy Server");
+					ivyqt->start(broadcast_ip_str, 2010);
+					setWindowTitle(broadcast_ip_str);
+					goto ivy_initialized; //to break out of 2 loops. no it isn't bad practice in this precise case
+				}
+				
+			}
+		}
+	}
+	ivy_initialized:
+    free(ifaddrs);
+
+
 	LoadConfig(cfgfilepath);
+}
+void MainWindow::sendMsg(QString str){
+	ivyqt->send(str);
 }
 
 QString MainWindow::find_config_file(const char* filename) {
@@ -588,6 +637,18 @@ void MainWindow::ReadThread(t_AmpConfiguration ampConfiguration)
 		dNow = lsl::local_clock();
 		vfDataBufferMultiplexed.resize(ampConfiguration.m_nChunkSize * (nChannelLabelCnt + nExtraEEGChannelCnt));
 		vnTriggers.resize(ampConfiguration.m_nChunkSize);
+
+		//initial ivy message
+		ivyqt->bindMessage("EEG_Init_Request",[=](Peer*, QStringList){
+		QString init_message_ivy="EEG_Init ";
+		init_message_ivy.append(QString::number(nChannelLabelCnt));
+		init_message_ivy.append(";");
+		init_message_ivy.append(QString::number((int)m_nSamplingRate));
+		init_message_ivy.append("\x03");
+        emit send(init_message_ivy);});
+
+
+
 		while (!m_bStop)
 		{
 
@@ -612,11 +673,25 @@ void MainWindow::ReadThread(t_AmpConfiguration ampConfiguration)
 					nPreviousMarker = nMarker;
 				}
 			}
+			//Ivy message sending
+			for (int i=0;i<nSampleCnt;i++){
+				QString m_message_ivy="EEG_Data ";
+				m_message_ivy.append(QString::number(dNow,'g',8));
+				m_message_ivy.append(" ");
+				for(int k=0;k<nChannelLabelCnt;k++){
+					m_message_ivy.append(QString::number(((float)vfDataBufferMultiplexed[i*(nChannelLabelCnt + nExtraEEGChannelCnt) + k]),'g',6));
+					m_message_ivy.append(";");
+				}
+				m_message_ivy.append("\x03"); //etx-terminated message
+				emit send(m_message_ivy.toUtf8());
+			}
 			outData.push_chunk_multiplexed(vfDataBufferMultiplexed, dNow);
 			vfDataBufferMultiplexed.clear();
 			vnTriggers.clear();
 			dNow = lsl::local_clock();
 			nSamplesPulled = 0;
+
+			
 		}
 		if (poutMarkerOutlet != NULL)
 			delete(poutMarkerOutlet);

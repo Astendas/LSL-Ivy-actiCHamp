@@ -17,8 +17,14 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <WinIoCtl.h>
+#include <winsock2.h>
+// Headers that need to be included after winsock2.h:
+#include <iphlpapi.h>
+#include <ws2ipdef.h>
+#include <ws2tcpip.h>
 
 #include "LibTalker.h"
+#include <IvyQt/ivyqt.h>
 
 
 struct t_AppVersion 
@@ -72,6 +78,9 @@ private slots:
     void UpdateChannelLabelsGUI(int);
     void ChooseDevice(int which);
     void RadioButtonBehavior(bool b);
+    void sendMsg(QString str);
+signals:
+	void send(QString str);
 
 
 private:
@@ -93,6 +102,7 @@ private:
     t_TriggerOutputMode m_TriggerOutputMode;
     std::unique_ptr<std::thread>  m_ptReadThread;   	
     Ui::MainWindow *ui;
+    IvyQt* ivyqt;
 };
 
 #endif // MAINWINDOW_H
