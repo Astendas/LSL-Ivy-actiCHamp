@@ -644,7 +644,6 @@ void MainWindow::ReadThread(t_AmpConfiguration ampConfiguration)
 		init_message_ivy.append(QString::number(nChannelLabelCnt));
 		init_message_ivy.append(";");
 		init_message_ivy.append(QString::number((int)m_nSamplingRate));
-		init_message_ivy.append("\x03");
         emit send(init_message_ivy);});
 
 
@@ -682,7 +681,6 @@ void MainWindow::ReadThread(t_AmpConfiguration ampConfiguration)
 					m_message_ivy.append(QString::number(((float)vfDataBufferMultiplexed[i*(nChannelLabelCnt + nExtraEEGChannelCnt) + k]),'g',6));
 					m_message_ivy.append(";");
 				}
-				m_message_ivy.append("\x03"); //etx-terminated message
 				emit send(m_message_ivy.toUtf8());
 			}
 			outData.push_chunk_multiplexed(vfDataBufferMultiplexed, dNow);
